@@ -8,6 +8,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+void print_received(char *buffer, ssize_t bytes_received);
+
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
   std::cout << std::unitbuf;
@@ -18,9 +20,7 @@ int main(int argc, char **argv) {
    std::cerr << "Failed to create server socket\n";
    return 1;
   }
-  
-  // Since the tester restarts your program quite often, setting SO_REUSEADDR
-  // ensures that we don't run into 'Address already in use' errors
+
   int reuse = 1;
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
     std::cerr << "setsockopt failed\n";
@@ -47,24 +47,36 @@ int main(int argc, char **argv) {
   int client_addr_len = sizeof(client_addr);
   std::cout << "Waiting for a client to connect...\n";
 
-  // You can use print statements as follows for debugging, they'll be visible when running tests.
   std::cout << "Logs from your program will appear here!\n";
 
-  // Uncomment this block to pass the first stage
   int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
   std::cout << "Client connected\n";
 
-  std::string buffer(1024, 0);
+  char buffer[1024];
+  ssize_t bytes_received = 0;
 
-  while (int status = recv(client_fd, &buffer, sizeof(buffer), 0)) {
-    if (status == -1) {
-      std::cerr << "recv failed\n";
-      return 1;
+  while (true) {
+    memset(buffer, 0, sizeof(buffer));
+
+    bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+
+    if (bytes_received <= 0) {
+      if (bytes_received == 0) {
+        std::cout << "Client disconnected\n";
+      } else {
+        std::cerr << "Error in recv()\n";
+      }
+      break;
     }
 
-    if (buffer == "PING") {
+    buffer[bytes_received] = '\0';
+
+    print_received(buffer, bytes_received);
+
+    if (strncmp(buffer, "PING", 4) == 0) {
       std::string response = "+PONG\r\n";
       send(client_fd, response.c_str(), response.size(), 0);
+      std::cout << "Sent: +PONG\\r\\n" << std::endl;
     }
   }
 
@@ -72,4 +84,20 @@ int main(int argc, char **argv) {
   close(server_fd);
 
   return 0;
+}
+
+void print_received(char *buffer, ssize_t bytes_received) {
+  std::cout << "Received: ";
+  std::cout.flush();
+
+  for (size_t i = 0; i < bytes_received; i++) {
+    if (buffer[i] == '\r') {
+      std::cout << "\\r";
+    } else if (buffer[i] == '\n') {
+      std::cout << "\\n";
+    } else {
+      std::cout << buffer[i];
+    }
+  }
+  std::cout << std::endl;
 }
