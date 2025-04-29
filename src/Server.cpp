@@ -9,12 +9,13 @@
 #include <netdb.h>
 
 void print_received(char *buffer, ssize_t bytes_received);
+bool is_ping_command(const char *buffer);
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
-  
+
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
    std::cerr << "Failed to create server socket\n";
@@ -26,23 +27,23 @@ int main(int argc, char **argv) {
     std::cerr << "setsockopt failed\n";
     return 1;
   }
-  
+
   struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = INADDR_ANY;
   server_addr.sin_port = htons(6379);
-  
+
   if (bind(server_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) != 0) {
     std::cerr << "Failed to bind to port 6379\n";
     return 1;
   }
-  
+
   int connection_backlog = 5;
   if (listen(server_fd, connection_backlog) != 0) {
     std::cerr << "listen failed\n";
     return 1;
   }
-  
+
   struct sockaddr_in client_addr;
   int client_addr_len = sizeof(client_addr);
   std::cout << "Waiting for a client to connect...\n";
@@ -73,10 +74,12 @@ int main(int argc, char **argv) {
 
     print_received(buffer, bytes_received);
 
-    if (strncmp(buffer, "PING", 4) == 0) {
+    if (is_ping_command(buffer)) {
       std::string response = "+PONG\r\n";
-      send(client_fd, response.c_str(), response.size(), 0);
-      std::cout << "Sent: +PONG\\r\\n" << std::endl;
+      ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
+
+      if (bytes_sent < 0) std::cerr << "Error sending response\n";
+      else std::cout << "Sent: +PONG\\r\\n" << std::endl;
     }
   }
 
@@ -100,4 +103,9 @@ void print_received(char *buffer, ssize_t bytes_received) {
     }
   }
   std::cout << std::endl;
+}
+
+bool is_ping_command(const char *buffer) {
+  std::string buf(buffer);
+  return buf.find("PING") != std::string::npos;
 }
