@@ -1,66 +1,10 @@
-Fetching registry information from https://github.com/microsoft/vcpkg (HEAD)...
 Detecting compiler hash for triplet x64-linux...
 Compiler found: /usr/bin/c++
-The following packages will be built and installed:
-    asio:x64-linux@1.30.2 -- git+https://github.com/microsoft/vcpkg@17ce1a2d17d0cb0d50eb72c89a9e51f472ef31f4
-    pthreads:x64-linux@3.0.0#14 -- git+https://github.com/microsoft/vcpkg@2e0a6df2800d3677b941dc6504f083965b7886d9
-  * vcpkg-cmake:x64-linux@2023-05-04 -- git+https://github.com/microsoft/vcpkg@88a7058fc7fa73a9c4c99cfcae9d79e2abf87a5a
-  * vcpkg-cmake-config:x64-linux@2022-02-06#1 -- git+https://github.com/microsoft/vcpkg@8d54cc4f487d51b655abec5f9c9c3f86ca83311f
-Additional packages (*) will be modified to complete this operation.
-Restored 0 package(s) from /home/roditu/.cache/vcpkg/archives in 212 us. Use --debug to see more details.
-Installing 1/4 vcpkg-cmake-config:x64-linux@2022-02-06#1...
-Building vcpkg-cmake-config:x64-linux@2022-02-06#1...
-/home/roditu/.cache/vcpkg/registries/git-trees/8d54cc4f487d51b655abec5f9c9c3f86ca83311f: info: installing from git registry git+https://github.com/microsoft/vcpkg@8d54cc4f487d51b655abec5f9c9c3f86ca83311f
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake-config_x64-linux/share/vcpkg-cmake-config/vcpkg_cmake_config_fixup.cmake
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake-config_x64-linux/share/vcpkg-cmake-config/vcpkg-port-config.cmake
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake-config_x64-linux/share/vcpkg-cmake-config/copyright
--- Skipping post-build validation due to VCPKG_POLICY_EMPTY_PACKAGE
-Starting submission of vcpkg-cmake-config:x64-linux@2022-02-06#1 to 1 binary cache(s) in the background
-Elapsed time to handle vcpkg-cmake-config:x64-linux: 894 ms
-vcpkg-cmake-config:x64-linux package ABI: b7858eb687bbc5408e7824ed0dfd5b44db7309c6df1bf7f89f82da50e4915e50
-Installing 2/4 vcpkg-cmake:x64-linux@2023-05-04...
-Building vcpkg-cmake:x64-linux@2023-05-04...
-/home/roditu/.cache/vcpkg/registries/git-trees/88a7058fc7fa73a9c4c99cfcae9d79e2abf87a5a: info: installing from git registry git+https://github.com/microsoft/vcpkg@88a7058fc7fa73a9c4c99cfcae9d79e2abf87a5a
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake_x64-linux/share/vcpkg-cmake/vcpkg_cmake_configure.cmake
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake_x64-linux/share/vcpkg-cmake/vcpkg_cmake_build.cmake
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake_x64-linux/share/vcpkg-cmake/vcpkg_cmake_install.cmake
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake_x64-linux/share/vcpkg-cmake/vcpkg-port-config.cmake
--- Installing: /home/roditu/vcpkg/packages/vcpkg-cmake_x64-linux/share/vcpkg-cmake/copyright
--- Performing post-build validation
-Starting submission of vcpkg-cmake:x64-linux@2023-05-04 to 1 binary cache(s) in the background
-Elapsed time to handle vcpkg-cmake:x64-linux: 366 ms
-vcpkg-cmake:x64-linux package ABI: 1db8e8bfa23afd4a380811fd9c5325612cffc4aa56dd1b435e95b29c8b43386f
-Completed submission of vcpkg-cmake-config:x64-linux@2022-02-06#1 to 1 binary cache(s) in 6.23 ms
-Installing 3/4 asio:x64-linux@1.30.2...
-Building asio:x64-linux@1.30.2...
-/home/roditu/.cache/vcpkg/registries/git-trees/17ce1a2d17d0cb0d50eb72c89a9e51f472ef31f4: info: installing from git registry git+https://github.com/microsoft/vcpkg@17ce1a2d17d0cb0d50eb72c89a9e51f472ef31f4
-Downloading https://github.com/chriskohlhoff/asio/archive/asio-1-30-2.tar.gz -> chriskohlhoff-asio-asio-1-30-2.tar.gz
-Successfully downloaded chriskohlhoff-asio-asio-1-30-2.tar.gz
--- Extracting source /home/roditu/vcpkg/downloads/chriskohlhoff-asio-asio-1-30-2.tar.gz
--- Using source at /home/roditu/vcpkg/buildtrees/asio/src/sio-1-30-2-504a65d4d1.clean
--- Configuring x64-linux
--- Building x64-linux-dbg
--- Building x64-linux-rel
--- Installing: /home/roditu/vcpkg/packages/asio_x64-linux/share/asio/asio-config.cmake
--- Installing: /home/roditu/vcpkg/packages/asio_x64-linux/share/asio/copyright
--- Performing post-build validation
-Starting submission of asio:x64-linux@1.30.2 to 1 binary cache(s) in the background
-Elapsed time to handle asio:x64-linux: 1.2 min
-asio:x64-linux package ABI: a12b4f6f44a670f320b7f1ac249f34e42b839622fd87eba47fefe48b64987467
-Completed submission of vcpkg-cmake:x64-linux@2023-05-04 to 1 binary cache(s) in 3.15 ms
-Installing 4/4 pthreads:x64-linux@3.0.0#14...
-Building pthreads:x64-linux@3.0.0#14...
-/home/roditu/.cache/vcpkg/registries/git-trees/2e0a6df2800d3677b941dc6504f083965b7886d9: info: installing from git registry git+https://github.com/microsoft/vcpkg@2e0a6df2800d3677b941dc6504f083965b7886d9
--- Skipping post-build validation due to VCPKG_POLICY_EMPTY_PACKAGE
-Starting submission of pthreads:x64-linux@3.0.0#14 to 1 binary cache(s) in the background
-Elapsed time to handle pthreads:x64-linux: 380 ms
-pthreads:x64-linux package ABI: 454cc6385c5ea402f80fd9382a8836fecb5e62d3943c3ddbb5fe7ebcce800a33
-Total install time: 1.2 min
+All requested packages are currently installed.
+Total install time: 30.9 ms
 asio provides CMake targets:
 
   # this is heuristically generated, and may not be correct
   find_package(asio CONFIG REQUIRED)
   target_link_libraries(main PRIVATE asio::asio)
 
-Completed submission of asio:x64-linux@1.30.2 to 1 binary cache(s) in 86.2 ms
-Completed submission of pthreads:x64-linux@3.0.0#14 to 1 binary cache(s) in 2.29 ms
