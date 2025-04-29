@@ -54,8 +54,19 @@ int main(int argc, char **argv) {
   int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
   std::cout << "Client connected\n";
 
-  std::string response = "+PONG\r\n";
-  send(client_fd, response.c_str(), response.size(), 0);
+  std::string buffer(1024, 0);
+
+  while (int status = recv(client_fd, &buffer, sizeof(buffer), 0)) {
+    if (status == -1) {
+      std::cerr << "recv failed\n";
+      return 1;
+    }
+
+    if (buffer == "PING") {
+      std::string response = "+PONG\r\n";
+      send(client_fd, response.c_str(), response.size(), 0);
+    }
+  }
 
   close(client_fd);
   close(server_fd);
