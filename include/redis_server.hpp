@@ -1,39 +1,48 @@
 #ifndef REDIS_SERVER_HPP
 #define REDIS_SERVER_HPP
 
+#include <asio.hpp>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <unordered_map>
+#include <algorithm>
+#include <cctype>
+
+class RedisSession;
 
 class RedisServer {
 public:
-    RedisServer(int port = 6379);
-    ~RedisServer();
-
-    void run();
+    RedisServer(asio::io_context& io_context, int port = 6379);
+    void start();
+    void removeSession(std::shared_ptr<RedisSession> session);
 
 private:
-    int port_;
-    int server_fd_;
-    std::vector<int> client_fds_;
-    bool running_;
+    void acceptConnection();
 
-    bool initialize();
-
-    static void setNonBlocking(int sock);
-
-    void acceptNewConnection();
-    void handleClientData(int client_fd);
-
-    bool isPingCommand(const std::string& buffer);
-    void sendPong(int client_fd);
-
-    void printReceivedData(const char* buffer, ssize_t bytes_received);
-
-    void cleanup();
+    asio::io_context& io_context_;
+    asio::ip::tcp::acceptor acceptor_;
+    std::unordered_set<std::shared_ptr<RedisSession>> sessions_;
 };
 
-#endif
+class RedisSession : public std::enable_shared_from_this<RedisSession> {
+public:
+    RedisSession(asio::ip::tcp::socket socket, RedisServer& server);
+    void start();
+
+private:
+    void readData();
+    void processData();
+    void sendResponse(const std::string& response);
+    void printReceivedData();
+
+    asio::ip::tcp::socket socket_;
+    RedisServer& server_;
+    std::array<char, 1024> buffer_;
+    size_t bytes_received_;
+    std::string data_buffer_;
+};
+
+#endif // REDIS_SERVER_HPP
