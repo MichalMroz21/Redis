@@ -7,9 +7,42 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <fcntl.h>
+#include <vector>
+#include <algorithm>
 
-void print_received(char *buffer, ssize_t bytes_received);
-bool is_ping_command(const char *buffer);
+void set_nonblocking(int sock) {
+  int flags = fcntl(sock, F_GETFL, 0);
+  if (flags == -1) {
+    std::cerr << "fcntl F_GETFL failed\n";
+    exit(1);
+  }
+  if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1) {
+    std::cerr << "fcntl F_SETFL O_NONBLOCK failed\n";
+    exit(1);
+  }
+}
+
+void print_received(const char *buffer, ssize_t bytes_received) {
+  std::cout << "Received: ";
+  std::cout.flush();
+
+  for (size_t i = 0; i < bytes_received; i++) {
+    if (buffer[i] == '\r') {
+      std::cout << "\\r";
+    } else if (buffer[i] == '\n') {
+      std::cout << "\\n";
+    } else {
+      std::cout << buffer[i];
+    }
+  }
+  std::cout << std::endl;
+}
+
+bool is_ping_command(const char *buffer) {
+  std::string buf(buffer);
+  return buf.find("PING") != std::string::npos;
+}
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -44,68 +77,94 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  struct sockaddr_in client_addr;
-  int client_addr_len = sizeof(client_addr);
-  std::cout << "Waiting for a client to connect...\n";
+  set_nonblocking(server_fd);
 
+  std::cout << "Waiting for clients to connect...\n";
   std::cout << "Logs from your program will appear here!\n";
 
-  int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
-  std::cout << "Client connected\n";
-
-  char buffer[1024];
-  ssize_t bytes_received = 0;
+  std::vector<int> client_fds;
 
   while (true) {
-    memset(buffer, 0, sizeof(buffer));
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
 
-    bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    FD_SET(server_fd, &read_fds);
+    int max_fd = server_fd;
 
-    if (bytes_received <= 0) {
-      if (bytes_received == 0) {
-        std::cout << "Client disconnected\n";
-      } else {
-        std::cerr << "Error in recv()\n";
-      }
+    for (int client_fd : client_fds) {
+      FD_SET(client_fd, &read_fds);
+      max_fd = std::max(max_fd, client_fd);
+    }
+
+    int activity = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
+
+    if (activity < 0) {
+      std::cerr << "select error\n";
       break;
     }
 
-    buffer[bytes_received] = '\0';
+    if (FD_ISSET(server_fd, &read_fds)) {
+      struct sockaddr_in client_addr;
+      int client_addr_len = sizeof(client_addr);
 
-    print_received(buffer, bytes_received);
+      int new_client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
 
-    if (is_ping_command(buffer)) {
-      std::string response = "+PONG\r\n";
-      ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
+      if (new_client_fd < 0) {
+        if (errno != EWOULDBLOCK && errno != EAGAIN) {
+          std::cerr << "accept failed\n";
+        }
+      } else {
+        set_nonblocking(new_client_fd);
 
-      if (bytes_sent < 0) std::cerr << "Error sending response\n";
-      else std::cout << "Sent: +PONG\\r\\n" << std::endl;
+        client_fds.push_back(new_client_fd);
+
+        std::cout << "New client connected, fd: " << new_client_fd << std::endl;
+      }
+    }
+
+    for (auto it = client_fds.begin(); it != client_fds.end(); ) {
+      int client_fd = *it;
+
+      if (FD_ISSET(client_fd, &read_fds)) {
+        char buffer[1024];
+        memset(buffer, 0, sizeof(buffer));
+
+        ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+
+        if (bytes_received <= 0) {
+          if (bytes_received == 0) {
+            std::cout << "Client disconnected, fd: " << client_fd << std::endl;
+          } else {
+            if (errno != EWOULDBLOCK && errno != EAGAIN) {
+              std::cerr << "recv error on fd: " << client_fd << std::endl;
+            }
+          }
+
+          close(client_fd);
+          it = client_fds.erase(it);
+        } else {
+          buffer[bytes_received] = '\0';
+          print_received(buffer, bytes_received);
+
+          if (is_ping_command(buffer)) {
+            std::string response = "+PONG\r\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+            std::cout << "Sent PONG to client fd: " << client_fd << std::endl;
+          }
+
+          ++it;
+        }
+      } else {
+        ++it;
+      }
     }
   }
 
-  close(client_fd);
+  for (int client_fd : client_fds) {
+    close(client_fd);
+  }
+
   close(server_fd);
 
   return 0;
-}
-
-void print_received(char *buffer, ssize_t bytes_received) {
-  std::cout << "Received: ";
-  std::cout.flush();
-
-  for (size_t i = 0; i < bytes_received; i++) {
-    if (buffer[i] == '\r') {
-      std::cout << "\\r";
-    } else if (buffer[i] == '\n') {
-      std::cout << "\\n";
-    } else {
-      std::cout << buffer[i];
-    }
-  }
-  std::cout << std::endl;
-}
-
-bool is_ping_command(const char *buffer) {
-  std::string buf(buffer);
-  return buf.find("PING") != std::string::npos;
 }
