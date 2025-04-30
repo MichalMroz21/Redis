@@ -13,6 +13,7 @@ public:
     static std::string encodeError(const std::string& err);
     static std::string encodeBulkString(const std::string& str);
     static std::string encodeArray(const std::vector<std::string>& values);
+    static std::string encodeNullBulkString();
 };
 
 #endif // RESP_PARSER_HPP

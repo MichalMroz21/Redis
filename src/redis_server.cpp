@@ -38,6 +38,10 @@ void RedisServer::removeSession(std::shared_ptr<RedisSession> session) {
     sessions_.erase(session);
 }
 
+std::unordered_map<std::string, std::string>& RedisServer::getDataStore() {
+    return data_store_;
+}
+
 // RedisSession implementation
 RedisSession::RedisSession(asio::ip::tcp::socket socket, RedisServer& server)
     : socket_(std::move(socket)), server_(server), bytes_received_(0) {
@@ -90,6 +94,33 @@ void RedisSession::processData() {
                 response = RespParser::encodeError("ERR wrong number of arguments for 'echo' command");
             } else {
                 response = RespParser::encodeBulkString(command[1]);
+            }
+        } else if (cmd == "set") {
+            if (command.size() < 3) {
+                response = RespParser::encodeError("ERR wrong number of arguments for 'set' command");
+            } else {
+                std::string key = command[1];
+                std::string value = command[2];
+                
+                server_.getDataStore()[key] = value;
+
+                response = RespParser::encodeSimpleString("OK");
+            }
+        } else if (cmd == "get") {
+            if (command.size() < 2) {
+                response = RespParser::encodeError("ERR wrong number of arguments for 'get' command");
+            } else {
+                std::string key = command[1];
+
+                // Retrieve the value for the key
+                auto& data_store = server_.getDataStore();
+                auto it = data_store.find(key);
+
+                if (it != data_store.end()) {
+                    response = RespParser::encodeBulkString(it->second);
+                } else {
+                    response = RespParser::encodeNullBulkString();
+                }
             }
         } else {
             response = RespParser::encodeError("ERR unknown command '" + command[0] + "'");

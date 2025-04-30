@@ -77,3 +77,7 @@ std::string RespParser::encodeArray(const std::vector<std::string>& values) {
 
     return result;
 }
+
+std::string RespParser::encodeNullBulkString() {
+    return "$-1\r\n";
+}
