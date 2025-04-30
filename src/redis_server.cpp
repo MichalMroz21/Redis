@@ -38,10 +38,6 @@ void RedisServer::removeSession(std::shared_ptr<RedisSession> session) {
     sessions_.erase(session);
 }
 
-std::unordered_map<std::string, std::string>& RedisServer::getDataStore() {
-    return data_store_;
-}
-
 // RedisSession implementation
 RedisSession::RedisSession(asio::ip::tcp::socket socket, RedisServer& server)
     : socket_(std::move(socket)), server_(server), bytes_received_(0) {
@@ -101,7 +97,7 @@ void RedisSession::processData() {
             } else {
                 std::string key = command[1];
                 std::string value = command[2];
-                
+
                 server_.getDataStore()[key] = value;
 
                 response = RespParser::encodeSimpleString("OK");
