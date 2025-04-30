@@ -10,15 +10,39 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <optional>
 
 class RedisSession;
+
+struct RedisValue {
+    std::string value;
+    std::chrono::steady_clock::time_point expiry;
+    bool has_expiry;
+
+    RedisValue(const std::string& val)
+        : value(val), has_expiry(false) {}
+
+    RedisValue(const std::string& val, std::chrono::milliseconds ttl)
+        : value(val),
+          expiry(std::chrono::steady_clock::now() + ttl),
+          has_expiry(true) {}
+
+    bool is_expired() const {
+        return has_expiry && std::chrono::steady_clock::now() > expiry;
+    }
+};
 
 class RedisServer {
 public:
     RedisServer(asio::io_context& io_context, int port = 6379);
     void start();
     void removeSession(std::shared_ptr<RedisSession> session);
-    std::unordered_map<std::string, std::string>& getDataStore() { return data_store_; }
+
+    // Methods for data store access
+    bool setValue(const std::string& key, const std::string& value);
+    bool setValue(const std::string& key, const std::string& value, std::chrono::milliseconds ttl);
+    std::optional<std::string> getValue(const std::string& key);
 
 private:
     void acceptConnection();
@@ -26,7 +50,7 @@ private:
     asio::io_context& io_context_;
     asio::ip::tcp::acceptor acceptor_;
     std::unordered_set<std::shared_ptr<RedisSession>> sessions_;
-    std::unordered_map<std::string, std::string> data_store_;
+    std::unordered_map<std::string, RedisValue> data_store_;
 };
 
 class RedisSession : public std::enable_shared_from_this<RedisSession> {

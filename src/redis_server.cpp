@@ -38,7 +38,32 @@ void RedisServer::removeSession(std::shared_ptr<RedisSession> session) {
     sessions_.erase(session);
 }
 
-// RedisSession implementation
+bool RedisServer::setValue(const std::string& key, const std::string& value) {
+    data_store_[key] = RedisValue(value);
+    return true;
+}
+
+bool RedisServer::setValue(const std::string& key, const std::string& value, std::chrono::milliseconds ttl) {
+    data_store_[key] = RedisValue(value, ttl);
+    return true;
+}
+
+std::optional<std::string> RedisServer::getValue(const std::string& key) {
+    auto it = data_store_.find(key);
+
+    if (it == data_store_.end()) {
+        return std::nullopt;
+    }
+
+    // Check if the key has expired
+    if (it->second.is_expired()) {
+        data_store_.erase(it);
+        return std::nullopt;
+    }
+
+    return it->second.value;
+}
+
 RedisSession::RedisSession(asio::ip::tcp::socket socket, RedisServer& server)
     : socket_(std::move(socket)), server_(server), bytes_received_(0) {
 }
@@ -98,7 +123,35 @@ void RedisSession::processData() {
                 std::string key = command[1];
                 std::string value = command[2];
 
-                server_.getDataStore()[key] = value;
+                bool has_expiry = false;
+                std::chrono::milliseconds ttl(0);
+
+                for (size_t i = 3; i < command.size() - 1; i++) {
+                    std::string option = command[i];
+                    std::transform(option.begin(), option.end(), option.begin(),
+                                  [](unsigned char c) { return std::tolower(c); });
+
+                    if (option == "px" && i + 1 < command.size()) {
+                        try {
+                            int64_t ms = std::stoll(command[i + 1]);
+                            ttl = std::chrono::milliseconds(ms);
+                            has_expiry = true;
+                            i++; // Skip the next argument (the expiry time)
+                        } catch (const std::exception& e) {
+                            response = RespParser::encodeError("ERR value is not an integer or out of range");
+                            sendResponse(response);
+                            data_buffer_.clear();
+                            return;
+                        }
+                    }
+                }
+
+                // Store the key-value pair with or without expiry
+                if (has_expiry) {
+                    server_.setValue(key, value, ttl);
+                } else {
+                    server_.setValue(key, value);
+                }
 
                 response = RespParser::encodeSimpleString("OK");
             }
@@ -109,11 +162,10 @@ void RedisSession::processData() {
                 std::string key = command[1];
 
                 // Retrieve the value for the key
-                auto& data_store = server_.getDataStore();
-                auto it = data_store.find(key);
+                auto value_opt = server_.getValue(key);
 
-                if (it != data_store.end()) {
-                    response = RespParser::encodeBulkString(it->second);
+                if (value_opt) {
+                    response = RespParser::encodeBulkString(*value_opt);
                 } else {
                     response = RespParser::encodeNullBulkString();
                 }
