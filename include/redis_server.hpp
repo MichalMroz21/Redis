@@ -20,6 +20,8 @@ struct RedisValue {
     std::chrono::steady_clock::time_point expiry;
     bool has_expiry;
 
+    RedisValue() : value(""), has_expiry(false) {}
+
     RedisValue(const std::string& val)
         : value(val), has_expiry(false) {}
 
