@@ -19,10 +19,6 @@ RedisServer::RedisServer(asio::io_context& io_context, int port)
     : io_context_(io_context),
       acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)) {
 
-    //Default save directory and file name
-    config_["dir"] = "databases";
-    config_["dbfilename"] = "save.rdb";
-
     std::cout << "Redis server initialized on port " << port << std::endl;
 }
 
