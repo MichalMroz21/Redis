@@ -7,18 +7,18 @@ The following packages will be built and installed:
   * vcpkg-cmake:x64-linux@2023-05-04 -- git+https://github.com/microsoft/vcpkg@88a7058fc7fa73a9c4c99cfcae9d79e2abf87a5a
   * vcpkg-cmake-config:x64-linux@2022-02-06#1 -- git+https://github.com/microsoft/vcpkg@8d54cc4f487d51b655abec5f9c9c3f86ca83311f
 Additional packages (*) will be modified to complete this operation.
-Restored 4 package(s) from /home/roditu/.cache/vcpkg/archives in 47 ms. Use --debug to see more details.
+Restored 4 package(s) from /home/roditu/.cache/vcpkg/archives in 46.4 ms. Use --debug to see more details.
 Installing 1/4 vcpkg-cmake-config:x64-linux@2022-02-06#1...
-Elapsed time to handle vcpkg-cmake-config:x64-linux: 322 ms
+Elapsed time to handle vcpkg-cmake-config:x64-linux: 290 ms
 vcpkg-cmake-config:x64-linux package ABI: b7858eb687bbc5408e7824ed0dfd5b44db7309c6df1bf7f89f82da50e4915e50
 Installing 2/4 vcpkg-cmake:x64-linux@2023-05-04...
-Elapsed time to handle vcpkg-cmake:x64-linux: 449 ms
+Elapsed time to handle vcpkg-cmake:x64-linux: 430 ms
 vcpkg-cmake:x64-linux package ABI: 1db8e8bfa23afd4a380811fd9c5325612cffc4aa56dd1b435e95b29c8b43386f
 Installing 3/4 asio:x64-linux@1.30.2...
 Elapsed time to handle asio:x64-linux: 15 s
 asio:x64-linux package ABI: a12b4f6f44a670f320b7f1ac249f34e42b839622fd87eba47fefe48b64987467
 Installing 4/4 pthreads:x64-linux@3.0.0#14...
-Elapsed time to handle pthreads:x64-linux: 126 ms
+Elapsed time to handle pthreads:x64-linux: 155 ms
 pthreads:x64-linux package ABI: 454cc6385c5ea402f80fd9382a8836fecb5e62d3943c3ddbb5fe7ebcce800a33
 Total install time: 16 s
 asio provides CMake targets:
