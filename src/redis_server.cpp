@@ -4,11 +4,17 @@
 #include <memory>
 #include <algorithm>
 #include <cctype>
+#include <sstream>
 
 // RedisServer implementation
 RedisServer::RedisServer(asio::io_context& io_context, int port)
     : io_context_(io_context),
       acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)) {
+
+    // Set default configuration values
+    config_["dir"] = ".";
+    config_["dbfilename"] = "dump.rdb";
+
     std::cout << "Redis server initialized on port " << port << std::endl;
 }
 
@@ -64,6 +70,23 @@ std::optional<std::string> RedisServer::getValue(const std::string& key) {
     return it->second.value;
 }
 
+void RedisServer::setConfig(const std::string& key, const std::string& value) {
+    config_[key] = value;
+}
+
+std::string RedisServer::getConfig(const std::string& key) const {
+    auto it = config_.find(key);
+    if (it != config_.end()) {
+        return it->second;
+    }
+    return "";
+}
+
+bool RedisServer::hasConfig(const std::string& key) const {
+    return config_.find(key) != config_.end();
+}
+
+// RedisSession implementation
 RedisSession::RedisSession(asio::ip::tcp::socket socket, RedisServer& server)
     : socket_(std::move(socket)), server_(server), bytes_received_(0) {
 }
@@ -93,16 +116,18 @@ void RedisSession::readData() {
         });
 }
 
+std::string toLower(const std::string& s) {
+    std::string result = s;
+    std::transform(result.begin(), result.end(), result.begin(),
+                  [](unsigned char c) { return std::tolower(c); });
+    return result;
+}
+
 void RedisSession::processData() {
     std::vector<std::string> command = RespParser::decode(data_buffer_);
 
     if (!command.empty()) {
-        std::string response;
-
-        // Convert command to lowercase for case-insensitive comparison
-        std::string cmd = command[0];
-        std::transform(cmd.begin(), cmd.end(), cmd.begin(),
-                      [](unsigned char c) { return std::tolower(c); });
+        std::string response, cmd = toLower(command[0]);
 
         if (cmd == "ping") {
             if (command.size() > 1) {
@@ -122,16 +147,12 @@ void RedisSession::processData() {
             } else {
                 std::string key = command[1];
                 std::string value = command[2];
-
+                
                 bool has_expiry = false;
                 std::chrono::milliseconds ttl(0);
 
                 for (size_t i = 3; i < command.size() - 1; i++) {
-                    std::string option = command[i];
-                    std::transform(option.begin(), option.end(), option.begin(),
-                                  [](unsigned char c) { return std::tolower(c); });
-
-                    if (option == "px" && i + 1 < command.size()) {
+                    if (toLower(command[i]) == "px" && i + 1 < command.size()) {
                         try {
                             int64_t ms = std::stoll(command[i + 1]);
                             ttl = std::chrono::milliseconds(ms);
@@ -146,7 +167,6 @@ void RedisSession::processData() {
                     }
                 }
 
-                // Store the key-value pair with or without expiry
                 if (has_expiry) {
                     server_.setValue(key, value, ttl);
                 } else {
@@ -161,7 +181,6 @@ void RedisSession::processData() {
             } else {
                 std::string key = command[1];
 
-                // Retrieve the value for the key
                 auto value_opt = server_.getValue(key);
 
                 if (value_opt) {
@@ -169,6 +188,23 @@ void RedisSession::processData() {
                 } else {
                     response = RespParser::encodeNullBulkString();
                 }
+            }
+        } else if (cmd == "config" && command.size() >= 3) {
+            std::string subcommand = toLower(command[1]);
+
+            if (subcommand == "get") {
+                std::string param = toLower(command[2]);
+
+                if (server_.hasConfig(param)) {
+                    std::vector<std::string> result = {param, server_.getConfig(param)};
+                    response = RespParser::encodeArray(result);
+                } else {
+                    // If the parameter doesn't exist, return an empty array
+                    std::vector<std::string> result;
+                    response = RespParser::encodeArray(result);
+                }
+            } else {
+                response = RespParser::encodeError("ERR syntax error");
             }
         } else {
             response = RespParser::encodeError("ERR unknown command '" + command[0] + "'");

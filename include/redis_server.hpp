@@ -15,11 +15,13 @@
 
 class RedisSession;
 
+// Structure to store a Redis value with its expiry time
 struct RedisValue {
     std::string value;
     std::chrono::steady_clock::time_point expiry;
     bool has_expiry;
 
+    // Default constructor
     RedisValue() : value(""), has_expiry(false) {}
 
     RedisValue(const std::string& val)
@@ -41,10 +43,13 @@ public:
     void start();
     void removeSession(std::shared_ptr<RedisSession> session);
 
-    // Methods for data store access
     bool setValue(const std::string& key, const std::string& value);
     bool setValue(const std::string& key, const std::string& value, std::chrono::milliseconds ttl);
     std::optional<std::string> getValue(const std::string& key);
+
+    void setConfig(const std::string& key, const std::string& value);
+    std::string getConfig(const std::string& key) const;
+    bool hasConfig(const std::string& key) const;
 
 private:
     void acceptConnection();
@@ -53,6 +58,8 @@ private:
     asio::ip::tcp::acceptor acceptor_;
     std::unordered_set<std::shared_ptr<RedisSession>> sessions_;
     std::unordered_map<std::string, RedisValue> data_store_;
+
+    std::unordered_map<std::string, std::string> config_;
 };
 
 class RedisSession : public std::enable_shared_from_this<RedisSession> {

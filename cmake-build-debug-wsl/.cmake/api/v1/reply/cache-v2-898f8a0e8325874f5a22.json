@@ -1127,10 +1127,10 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "No help, variable specified on the command line."
+					"value" : "The CMake toolchain file"
 				}
 			],
-			"type" : "UNINITIALIZED",
+			"type" : "FILEPATH",
 			"value" : "/home/roditu/vcpkg/scripts/buildsystems/vcpkg.cmake"
 		},
 		{
