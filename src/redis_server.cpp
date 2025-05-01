@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <filesystem>
 
 // Helper function to convert a string to lowercase
 std::string toLower(const std::string& s) {
@@ -21,15 +22,31 @@ RedisServer::RedisServer(asio::io_context& io_context, int port)
       acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)) {
 
     // Set default configuration values
-    config_["dir"] = "../databases";
-    config_["dbfilename"] = "save.rdb";
+    config_["dir"] = ".";
+    config_["dbfilename"] = "dump.rdb";
 
     std::cout << "Redis server initialized on port " << port << std::endl;
 }
 
 void RedisServer::start() {
+    // Print configuration
+    printConfig();
+
     // Load data from RDB file if it exists
-    loadRdbFile();
+    std::cout << "Attempting to load RDB file..." << std::endl;
+    bool loaded = loadRdbFile();
+    if (loaded) {
+        std::cout << "Successfully loaded RDB file" << std::endl;
+        std::cout << "Data store now contains " << data_store_.size() << " keys" << std::endl;
+
+        // Print all keys in the data store
+        std::cout << "Keys in data store:" << std::endl;
+        for (const auto& [key, value] : data_store_) {
+            std::cout << "  - '" << key << "' => '" << value.value << "'" << std::endl;
+        }
+    } else {
+        std::cout << "Failed to load RDB file or file does not exist" << std::endl;
+    }
 
     acceptConnection();
     std::cout << "Waiting for clients to connect...\n";
@@ -85,16 +102,30 @@ std::optional<std::string> RedisServer::getValue(const std::string& key) {
 std::vector<std::string> RedisServer::getKeys(const std::string& pattern) {
     std::vector<std::string> keys;
 
+    std::cout << "getKeys called with pattern: '" << pattern << "'" << std::endl;
+    std::cout << "Current data store size: " << data_store_.size() << std::endl;
+
+    // Print all keys in the data store
+    std::cout << "Keys in data store:" << std::endl;
+    for (const auto& [key, value] : data_store_) {
+        std::cout << "  - '" << key << "'" << std::endl;
+    }
+
     // For now, we only support the "*" pattern, which returns all keys
     if (pattern == "*") {
+        std::cout << "Pattern is '*', returning all keys" << std::endl;
         for (const auto& [key, value] : data_store_) {
             // Skip expired keys
             if (!value.is_expired()) {
+                std::cout << "Adding key to result: '" << key << "'" << std::endl;
                 keys.push_back(key);
+            } else {
+                std::cout << "Skipping expired key: '" << key << "'" << std::endl;
             }
         }
     }
 
+    std::cout << "Returning " << keys.size() << " keys" << std::endl;
     return keys;
 }
 
@@ -120,6 +151,13 @@ bool RedisServer::loadRdbFile() {
 
 bool RedisServer::saveRdbFile() {
     return RdbFile::saveToFile(config_["dir"], config_["dbfilename"], data_store_);
+}
+
+void RedisServer::printConfig() const {
+    std::cout << "Configuration:\n";
+    for (const auto& pair : config_) {
+        std::cout << "  " << pair.first << ": " << pair.second << "\n";
+    }
 }
 
 // RedisSession implementation
@@ -160,6 +198,13 @@ void RedisSession::processData() {
 
         // Keep original command for values that need to preserve case
         std::vector<std::string> originalCommand = command;
+
+        // Debug: Print the received command
+        std::cout << "Received command: ";
+        for (const auto& arg : originalCommand) {
+            std::cout << "'" << arg << "' ";
+        }
+        std::cout << std::endl;
 
         // Transform all command parts to lowercase in-place
         for (auto& str : command) {
@@ -232,19 +277,41 @@ void RedisSession::processData() {
                 }
             }
         } else if (command[0] == "keys") {
+            std::cout << "Processing KEYS command" << std::endl;
             if (originalCommand.size() < 2) {
                 response = RespParser::encodeError("ERR wrong number of arguments for 'keys' command");
             } else {
                 std::string pattern = originalCommand[1];
+                std::cout << "Pattern: '" << pattern << "'" << std::endl;
 
                 // Get keys matching the pattern
                 std::vector<std::string> keys = server_.getKeys(pattern);
+                std::cout << "Found " << keys.size() << " keys" << std::endl;
+
+                // Debug: Print the keys that will be returned
+                std::cout << "Keys to be returned:" << std::endl;
+                for (const auto& key : keys) {
+                    std::cout << "  - '" << key << "'" << std::endl;
+                }
 
                 // Encode the keys as a RESP array
                 response = RespParser::encodeArray(keys);
+
+                // Debug: Print the encoded response
+                std::cout << "Encoded response: ";
+                for (char c : response) {
+                    if (c == '\r') {
+                        std::cout << "\\r";
+                    } else if (c == '\n') {
+                        std::cout << "\\n";
+                    } else {
+                        std::cout << c;
+                    }
+                }
+                std::cout << std::endl;
             }
-        } else if (command[0] == "config" && command.size() >= 3) {
-            if (command[1] == "get") {
+        } else if (command[0] == "config" && command.size() >= 2) {
+            if (command[1] == "get" && command.size() >= 3) {
                 std::string param = command[2];
 
                 if (server_.hasConfig(param)) {
@@ -255,6 +322,14 @@ void RedisSession::processData() {
                     std::vector<std::string> result;
                     response = RespParser::encodeArray(result);
                 }
+            } else if (command[1] == "path") {
+                // New command to print the absolute path of the RDB file
+                std::filesystem::path dirPath = std::filesystem::path(server_.getConfig("dir"));
+                std::filesystem::path filePath = dirPath / server_.getConfig("dbfilename");
+                std::filesystem::path absolutePath = std::filesystem::absolute(filePath);
+
+                std::vector<std::string> result = {"path", absolutePath.string()};
+                response = RespParser::encodeArray(result);
             } else {
                 response = RespParser::encodeError("ERR syntax error");
             }
