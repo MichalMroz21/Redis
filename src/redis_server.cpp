@@ -273,6 +273,19 @@ void RedisSession::processData() {
             } else {
                 response = RespParser::encodeError("ERR failed to save RDB file");
             }
+        } else if (command[0] == "info") {
+            std::string section = "";
+            if (originalCommand.size() > 1) {
+                section = command[1];
+            }
+
+            std::string info;
+
+            if (section.empty() || section == "replication") {
+                info += "role:master\r\n";
+            }
+
+            response = RespParser::encodeBulkString(info);
         } else {
             response = RespParser::encodeError("ERR unknown command '" + originalCommand[0] + "'");
         }

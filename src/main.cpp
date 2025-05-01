@@ -5,7 +5,7 @@
 int main(int argc, char* argv[]) {
     try {
         asio::io_context io_context;
-        
+
         int port = 6379;
 
         std::string dir = "database";
