@@ -12,6 +12,7 @@
 #include <cctype>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 
 class RedisSession;
 
@@ -60,20 +61,6 @@ public:
     std::string getConfig(const std::string& key) const;
     bool hasConfig(const std::string& key) const;
     void printConfig() const;
-
-    // Add this method to the RedisServer class
-    void printConfig() const {
-        std::cout << "Current configuration:" << std::endl;
-        for (const auto& [key, value] : config_) {
-            std::cout << "  " << key << " = " << value << std::endl;
-        }
-
-        // Print absolute paths for dir and dbfilename
-        std::filesystem::path dirPath = std::filesystem::path(config_.at("dir"));
-        std::filesystem::path filePath = dirPath / config_.at("dbfilename");
-
-        std::cout << "  RDB file absolute path: " << std::filesystem::absolute(filePath) << std::endl;
-    }
 
     // RDB persistence methods
     bool loadRdbFile();

@@ -158,6 +158,12 @@ void RedisServer::printConfig() const {
     for (const auto& pair : config_) {
         std::cout << "  " << pair.first << ": " << pair.second << "\n";
     }
+
+    // Print absolute paths for dir and dbfilename
+    std::filesystem::path dirPath = std::filesystem::path(config_.at("dir"));
+    std::filesystem::path filePath = dirPath / config_.at("dbfilename");
+
+    std::cout << "  RDB file absolute path: " << std::filesystem::absolute(filePath) << std::endl;
 }
 
 // RedisSession implementation
