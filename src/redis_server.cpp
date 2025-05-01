@@ -1,10 +1,19 @@
 #include "redis_server.hpp"
 #include "resp_parser.hpp"
+#include "rdb_file.hpp"
 #include <iostream>
 #include <memory>
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+
+// Helper function to convert a string to lowercase
+std::string toLower(const std::string& s) {
+    std::string result = s;
+    std::transform(result.begin(), result.end(), result.begin(),
+                  [](unsigned char c) { return std::tolower(c); });
+    return result;
+}
 
 // RedisServer implementation
 RedisServer::RedisServer(asio::io_context& io_context, int port)
@@ -12,13 +21,16 @@ RedisServer::RedisServer(asio::io_context& io_context, int port)
       acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)) {
 
     // Set default configuration values
-    config_["dir"] = ".";
-    config_["dbfilename"] = "dump.rdb";
+    config_["dir"] = "../databases";
+    config_["dbfilename"] = "save.rdb";
 
     std::cout << "Redis server initialized on port " << port << std::endl;
 }
 
 void RedisServer::start() {
+    // Load data from RDB file if it exists
+    loadRdbFile();
+
     acceptConnection();
     std::cout << "Waiting for clients to connect...\n";
     std::cout << "Logs from your program will appear here!\n";
@@ -70,6 +82,22 @@ std::optional<std::string> RedisServer::getValue(const std::string& key) {
     return it->second.value;
 }
 
+std::vector<std::string> RedisServer::getKeys(const std::string& pattern) {
+    std::vector<std::string> keys;
+
+    // For now, we only support the "*" pattern, which returns all keys
+    if (pattern == "*") {
+        for (const auto& [key, value] : data_store_) {
+            // Skip expired keys
+            if (!value.is_expired()) {
+                keys.push_back(key);
+            }
+        }
+    }
+
+    return keys;
+}
+
 void RedisServer::setConfig(const std::string& key, const std::string& value) {
     config_[key] = value;
 }
@@ -84,6 +112,14 @@ std::string RedisServer::getConfig(const std::string& key) const {
 
 bool RedisServer::hasConfig(const std::string& key) const {
     return config_.find(key) != config_.end();
+}
+
+bool RedisServer::loadRdbFile() {
+    return RdbFile::loadFromFile(config_["dir"], config_["dbfilename"], data_store_);
+}
+
+bool RedisServer::saveRdbFile() {
+    return RdbFile::saveToFile(config_["dir"], config_["dbfilename"], data_store_);
 }
 
 // RedisSession implementation
@@ -116,45 +152,48 @@ void RedisSession::readData() {
         });
 }
 
-std::string toLower(const std::string& s) {
-    std::string result = s;
-    std::transform(result.begin(), result.end(), result.begin(),
-                  [](unsigned char c) { return std::tolower(c); });
-    return result;
-}
-
 void RedisSession::processData() {
     std::vector<std::string> command = RespParser::decode(data_buffer_);
 
     if (!command.empty()) {
-        std::string response, cmd = toLower(command[0]);
+        std::string response;
 
-        if (cmd == "ping") {
-            if (command.size() > 1) {
-                response = RespParser::encodeBulkString(command[1]);
+        // Keep original command for values that need to preserve case
+        std::vector<std::string> originalCommand = command;
+
+        // Transform all command parts to lowercase in-place
+        for (auto& str : command) {
+            std::transform(str.begin(), str.end(), str.begin(),
+                          [](unsigned char c) { return std::tolower(c); });
+        }
+
+        if (command[0] == "ping") {
+            if (originalCommand.size() > 1) {
+                response = RespParser::encodeBulkString(originalCommand[1]);
             } else {
                 response = RespParser::encodeSimpleString("PONG");
             }
-        } else if (cmd == "echo") {
-            if (command.size() < 2) {
+        } else if (command[0] == "echo") {
+            if (originalCommand.size() < 2) {
                 response = RespParser::encodeError("ERR wrong number of arguments for 'echo' command");
             } else {
-                response = RespParser::encodeBulkString(command[1]);
+                response = RespParser::encodeBulkString(originalCommand[1]);
             }
-        } else if (cmd == "set") {
-            if (command.size() < 3) {
+        } else if (command[0] == "set") {
+            if (originalCommand.size() < 3) {
                 response = RespParser::encodeError("ERR wrong number of arguments for 'set' command");
             } else {
-                std::string key = command[1];
-                std::string value = command[2];
-                
+                std::string key = originalCommand[1];
+                std::string value = originalCommand[2];
+
+                // Check for PX option (expiry in milliseconds)
                 bool has_expiry = false;
                 std::chrono::milliseconds ttl(0);
 
                 for (size_t i = 3; i < command.size() - 1; i++) {
-                    if (toLower(command[i]) == "px" && i + 1 < command.size()) {
+                    if (command[i] == "px" && i + 1 < command.size()) {
                         try {
-                            int64_t ms = std::stoll(command[i + 1]);
+                            int64_t ms = std::stoll(originalCommand[i + 1]);
                             ttl = std::chrono::milliseconds(ms);
                             has_expiry = true;
                             i++; // Skip the next argument (the expiry time)
@@ -167,6 +206,7 @@ void RedisSession::processData() {
                     }
                 }
 
+                // Store the key-value pair with or without expiry
                 if (has_expiry) {
                     server_.setValue(key, value, ttl);
                 } else {
@@ -175,25 +215,37 @@ void RedisSession::processData() {
 
                 response = RespParser::encodeSimpleString("OK");
             }
-        } else if (cmd == "get") {
-            if (command.size() < 2) {
+        } else if (command[0] == "get") {
+            if (originalCommand.size() < 2) {
                 response = RespParser::encodeError("ERR wrong number of arguments for 'get' command");
             } else {
-                std::string key = command[1];
+                std::string key = originalCommand[1];
 
+                // Retrieve the value for the key
                 auto value_opt = server_.getValue(key);
 
                 if (value_opt) {
                     response = RespParser::encodeBulkString(*value_opt);
                 } else {
+                    // Key doesn't exist or has expired
                     response = RespParser::encodeNullBulkString();
                 }
             }
-        } else if (cmd == "config" && command.size() >= 3) {
-            std::string subcommand = toLower(command[1]);
+        } else if (command[0] == "keys") {
+            if (originalCommand.size() < 2) {
+                response = RespParser::encodeError("ERR wrong number of arguments for 'keys' command");
+            } else {
+                std::string pattern = originalCommand[1];
 
-            if (subcommand == "get") {
-                std::string param = toLower(command[2]);
+                // Get keys matching the pattern
+                std::vector<std::string> keys = server_.getKeys(pattern);
+
+                // Encode the keys as a RESP array
+                response = RespParser::encodeArray(keys);
+            }
+        } else if (command[0] == "config" && command.size() >= 3) {
+            if (command[1] == "get") {
+                std::string param = command[2];
 
                 if (server_.hasConfig(param)) {
                     std::vector<std::string> result = {param, server_.getConfig(param)};
@@ -206,8 +258,15 @@ void RedisSession::processData() {
             } else {
                 response = RespParser::encodeError("ERR syntax error");
             }
+        } else if (command[0] == "save") {
+            // Save the current database state to the RDB file
+            if (server_.saveRdbFile()) {
+                response = RespParser::encodeSimpleString("OK");
+            } else {
+                response = RespParser::encodeError("ERR failed to save RDB file");
+            }
         } else {
-            response = RespParser::encodeError("ERR unknown command '" + command[0] + "'");
+            response = RespParser::encodeError("ERR unknown command '" + originalCommand[0] + "'");
         }
 
         sendResponse(response);

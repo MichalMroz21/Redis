@@ -21,7 +21,6 @@ struct RedisValue {
     std::chrono::steady_clock::time_point expiry;
     bool has_expiry;
 
-    // Default constructor
     RedisValue() : value(""), has_expiry(false) {}
 
     RedisValue(const std::string& val)
@@ -31,6 +30,9 @@ struct RedisValue {
         : value(val),
           expiry(std::chrono::steady_clock::now() + ttl),
           has_expiry(true) {}
+
+    RedisValue(const std::string& val, std::chrono::steady_clock::time_point exp, bool has_exp)
+        : value(val), expiry(exp), has_expiry(has_exp) {}
 
     bool is_expired() const {
         return has_expiry && std::chrono::steady_clock::now() > expiry;
@@ -43,13 +45,20 @@ public:
     void start();
     void removeSession(std::shared_ptr<RedisSession> session);
 
+    // Methods for data store access
     bool setValue(const std::string& key, const std::string& value);
     bool setValue(const std::string& key, const std::string& value, std::chrono::milliseconds ttl);
     std::optional<std::string> getValue(const std::string& key);
+    std::vector<std::string> getKeys(const std::string& pattern);
 
+    // Configuration methods
     void setConfig(const std::string& key, const std::string& value);
     std::string getConfig(const std::string& key) const;
     bool hasConfig(const std::string& key) const;
+
+    // RDB persistence methods
+    bool loadRdbFile();
+    bool saveRdbFile();
 
 private:
     void acceptConnection();
@@ -59,6 +68,7 @@ private:
     std::unordered_set<std::shared_ptr<RedisSession>> sessions_;
     std::unordered_map<std::string, RedisValue> data_store_;
 
+    // Configuration parameters
     std::unordered_map<std::string, std::string> config_;
 };
 
