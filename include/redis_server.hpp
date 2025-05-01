@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
-#include <optional>
+#include <filesystem>
 
 class RedisSession;
 
@@ -21,16 +21,20 @@ struct RedisValue {
     std::chrono::steady_clock::time_point expiry;
     bool has_expiry;
 
+    // Default constructor
     RedisValue() : value(""), has_expiry(false) {}
 
+    // Constructor for value without expiry
     RedisValue(const std::string& val)
         : value(val), has_expiry(false) {}
 
+    // Constructor for value with expiry in milliseconds
     RedisValue(const std::string& val, std::chrono::milliseconds ttl)
         : value(val),
           expiry(std::chrono::steady_clock::now() + ttl),
           has_expiry(true) {}
 
+    // Constructor for value with expiry as time_point
     RedisValue(const std::string& val, std::chrono::steady_clock::time_point exp, bool has_exp)
         : value(val), expiry(exp), has_expiry(has_exp) {}
 
@@ -55,6 +59,21 @@ public:
     void setConfig(const std::string& key, const std::string& value);
     std::string getConfig(const std::string& key) const;
     bool hasConfig(const std::string& key) const;
+    void printConfig() const;
+
+    // Add this method to the RedisServer class
+    void printConfig() const {
+        std::cout << "Current configuration:" << std::endl;
+        for (const auto& [key, value] : config_) {
+            std::cout << "  " << key << " = " << value << std::endl;
+        }
+
+        // Print absolute paths for dir and dbfilename
+        std::filesystem::path dirPath = std::filesystem::path(config_.at("dir"));
+        std::filesystem::path filePath = dirPath / config_.at("dbfilename");
+
+        std::cout << "  RDB file absolute path: " << std::filesystem::absolute(filePath) << std::endl;
+    }
 
     // RDB persistence methods
     bool loadRdbFile();
