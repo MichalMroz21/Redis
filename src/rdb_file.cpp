@@ -140,9 +140,21 @@ void RdbFile::skipMetadata(std::ifstream& file) {
         // Skip the metadata value
         if (key == "redis-bits") {
             // Special case for redis-bits, which is encoded as an 8-bit integer
-            uint8_t value;
-            file.read(reinterpret_cast<char*>(&value), 1);
-            std::cout << "Skipping metadata value (redis-bits): " << static_cast<int>(value) << std::endl;
+            uint8_t encoding;
+            file.read(reinterpret_cast<char*>(&encoding), 1);
+
+            if (encoding == 0xC0) {
+                // 8-bit integer encoding
+                uint8_t value;
+                file.read(reinterpret_cast<char*>(&value), 1);
+                std::cout << "Skipping metadata value (redis-bits): " << static_cast<int>(value) << std::endl;
+            } else {
+                // Regular string encoding
+                // Put the byte back, we'll read it again in readStringEncoding
+                file.seekg(-1, std::ios::cur);
+                std::string value = readStringEncoding(file);
+                std::cout << "Skipping metadata value: " << value << std::endl;
+            }
         } else {
             std::string value = readStringEncoding(file);
             std::cout << "Skipping metadata value: " << value << std::endl;
@@ -409,34 +421,26 @@ std::string RdbFile::readStringEncoding(std::ifstream& file) {
     uint8_t byte;
     file.read(reinterpret_cast<char*>(&byte), 1);
 
-    // Check the first two bits
-    uint8_t firstTwoBits = (byte & 0xC0) >> 6;
+    // Check if this is a special encoding
+    if (byte == 0xC0) {
+        // 8-bit integer encoding
+        uint8_t intValue;
+        file.read(reinterpret_cast<char*>(&intValue), 1);
+        return std::to_string(intValue);
+    }
 
     // Put the byte back, we'll read it again in readSizeEncoding
     file.seekg(-1, std::ios::cur);
 
-    if (firstTwoBits == 3 && byte == 0xC0) {
-        // Special case for 8-bit integer
-        // Skip the encoding byte
-        file.read(reinterpret_cast<char*>(&byte), 1);
+    // Regular string encoding
+    uint64_t size = readSizeEncoding(file);
 
-        // Read the integer
-        uint8_t intValue;
-        file.read(reinterpret_cast<char*>(&intValue), 1);
+    // Read the string
+    std::string str(size, '\0');
+    file.read(&str[0], size);
 
-        // Convert to string
-        return std::to_string(intValue);
-    } else {
-        // Regular string encoding
-        uint64_t size = readSizeEncoding(file);
-
-        // Read the string
-        std::string str(size, '\0');
-        file.read(&str[0], size);
-
-        std::cout << "Read string: " << str << std::endl;
-        return str;
-    }
+    std::cout << "Read string: " << str << std::endl;
+    return str;
 }
 
 void RdbFile::writeSizeEncoding(std::ofstream& file, uint64_t size) {
