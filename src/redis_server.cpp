@@ -8,7 +8,6 @@
 #include <sstream>
 #include <filesystem>
 
-// Helper function to convert a string to lowercase
 std::string toLower(const std::string& s) {
     std::string result = s;
     std::transform(result.begin(), result.end(), result.begin(),
@@ -16,12 +15,10 @@ std::string toLower(const std::string& s) {
     return result;
 }
 
-// RedisServer implementation
 RedisServer::RedisServer(asio::io_context& io_context, int port)
     : io_context_(io_context),
       acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)) {
 
-    // Set default configuration values
     config_["dir"] = ".";
     config_["dbfilename"] = "dump.rdb";
 
@@ -29,21 +26,13 @@ RedisServer::RedisServer(asio::io_context& io_context, int port)
 }
 
 void RedisServer::start() {
-    // Print configuration
     printConfig();
 
-    // Load data from RDB file if it exists
     std::cout << "Attempting to load RDB file..." << std::endl;
     bool loaded = loadRdbFile();
     if (loaded) {
         std::cout << "Successfully loaded RDB file" << std::endl;
         std::cout << "Data store now contains " << data_store_.size() << " keys" << std::endl;
-
-        // Print all keys in the data store
-        std::cout << "Keys in data store:" << std::endl;
-        for (const auto& [key, value] : data_store_) {
-            std::cout << "  - '" << key << "' => '" << value.value << "'" << std::endl;
-        }
     } else {
         std::cout << "Failed to load RDB file or file does not exist" << std::endl;
     }
@@ -90,7 +79,6 @@ std::optional<std::string> RedisServer::getValue(const std::string& key) {
         return std::nullopt;
     }
 
-    // Check if the key has expired
     if (it->second.is_expired()) {
         data_store_.erase(it);
         return std::nullopt;
@@ -102,30 +90,14 @@ std::optional<std::string> RedisServer::getValue(const std::string& key) {
 std::vector<std::string> RedisServer::getKeys(const std::string& pattern) {
     std::vector<std::string> keys;
 
-    std::cout << "getKeys called with pattern: '" << pattern << "'" << std::endl;
-    std::cout << "Current data store size: " << data_store_.size() << std::endl;
-
-    // Print all keys in the data store
-    std::cout << "Keys in data store:" << std::endl;
-    for (const auto& [key, value] : data_store_) {
-        std::cout << "  - '" << key << "'" << std::endl;
-    }
-
-    // For now, we only support the "*" pattern, which returns all keys
     if (pattern == "*") {
-        std::cout << "Pattern is '*', returning all keys" << std::endl;
         for (const auto& [key, value] : data_store_) {
-            // Skip expired keys
             if (!value.is_expired()) {
-                std::cout << "Adding key to result: '" << key << "'" << std::endl;
                 keys.push_back(key);
-            } else {
-                std::cout << "Skipping expired key: '" << key << "'" << std::endl;
             }
         }
     }
 
-    std::cout << "Returning " << keys.size() << " keys" << std::endl;
     return keys;
 }
 
@@ -159,14 +131,12 @@ void RedisServer::printConfig() const {
         std::cout << "  " << pair.first << ": " << pair.second << "\n";
     }
 
-    // Print absolute paths for dir and dbfilename
     std::filesystem::path dirPath = std::filesystem::path(config_.at("dir"));
     std::filesystem::path filePath = dirPath / config_.at("dbfilename");
 
     std::cout << "  RDB file absolute path: " << std::filesystem::absolute(filePath) << std::endl;
 }
 
-// RedisSession implementation
 RedisSession::RedisSession(asio::ip::tcp::socket socket, RedisServer& server)
     : socket_(std::move(socket)), server_(server), bytes_received_(0) {
 }
@@ -202,17 +172,8 @@ void RedisSession::processData() {
     if (!command.empty()) {
         std::string response;
 
-        // Keep original command for values that need to preserve case
         std::vector<std::string> originalCommand = command;
 
-        // Debug: Print the received command
-        std::cout << "Received command: ";
-        for (const auto& arg : originalCommand) {
-            std::cout << "'" << arg << "' ";
-        }
-        std::cout << std::endl;
-
-        // Transform all command parts to lowercase in-place
         for (auto& str : command) {
             std::transform(str.begin(), str.end(), str.begin(),
                           [](unsigned char c) { return std::tolower(c); });
@@ -237,7 +198,6 @@ void RedisSession::processData() {
                 std::string key = originalCommand[1];
                 std::string value = originalCommand[2];
 
-                // Check for PX option (expiry in milliseconds)
                 bool has_expiry = false;
                 std::chrono::milliseconds ttl(0);
 
@@ -247,7 +207,7 @@ void RedisSession::processData() {
                             int64_t ms = std::stoll(originalCommand[i + 1]);
                             ttl = std::chrono::milliseconds(ms);
                             has_expiry = true;
-                            i++; // Skip the next argument (the expiry time)
+                            i++;
                         } catch (const std::exception& e) {
                             response = RespParser::encodeError("ERR value is not an integer or out of range");
                             sendResponse(response);
@@ -257,7 +217,6 @@ void RedisSession::processData() {
                     }
                 }
 
-                // Store the key-value pair with or without expiry
                 if (has_expiry) {
                     server_.setValue(key, value, ttl);
                 } else {
@@ -272,49 +231,23 @@ void RedisSession::processData() {
             } else {
                 std::string key = originalCommand[1];
 
-                // Retrieve the value for the key
                 auto value_opt = server_.getValue(key);
 
                 if (value_opt) {
                     response = RespParser::encodeBulkString(*value_opt);
                 } else {
-                    // Key doesn't exist or has expired
                     response = RespParser::encodeNullBulkString();
                 }
             }
         } else if (command[0] == "keys") {
-            std::cout << "Processing KEYS command" << std::endl;
             if (originalCommand.size() < 2) {
                 response = RespParser::encodeError("ERR wrong number of arguments for 'keys' command");
             } else {
                 std::string pattern = originalCommand[1];
-                std::cout << "Pattern: '" << pattern << "'" << std::endl;
 
-                // Get keys matching the pattern
                 std::vector<std::string> keys = server_.getKeys(pattern);
-                std::cout << "Found " << keys.size() << " keys" << std::endl;
 
-                // Debug: Print the keys that will be returned
-                std::cout << "Keys to be returned:" << std::endl;
-                for (const auto& key : keys) {
-                    std::cout << "  - '" << key << "'" << std::endl;
-                }
-
-                // Encode the keys as a RESP array
                 response = RespParser::encodeArray(keys);
-
-                // Debug: Print the encoded response
-                std::cout << "Encoded response: ";
-                for (char c : response) {
-                    if (c == '\r') {
-                        std::cout << "\\r";
-                    } else if (c == '\n') {
-                        std::cout << "\\n";
-                    } else {
-                        std::cout << c;
-                    }
-                }
-                std::cout << std::endl;
             }
         } else if (command[0] == "config" && command.size() >= 2) {
             if (command[1] == "get" && command.size() >= 3) {
@@ -324,12 +257,10 @@ void RedisSession::processData() {
                     std::vector<std::string> result = {param, server_.getConfig(param)};
                     response = RespParser::encodeArray(result);
                 } else {
-                    // If the parameter doesn't exist, return an empty array
                     std::vector<std::string> result;
                     response = RespParser::encodeArray(result);
                 }
             } else if (command[1] == "path") {
-                // New command to print the absolute path of the RDB file
                 std::filesystem::path dirPath = std::filesystem::path(server_.getConfig("dir"));
                 std::filesystem::path filePath = dirPath / server_.getConfig("dbfilename");
                 std::filesystem::path absolutePath = std::filesystem::absolute(filePath);
@@ -340,7 +271,6 @@ void RedisSession::processData() {
                 response = RespParser::encodeError("ERR syntax error");
             }
         } else if (command[0] == "save") {
-            // Save the current database state to the RDB file
             if (server_.saveRdbFile()) {
                 response = RespParser::encodeSimpleString("OK");
             } else {
